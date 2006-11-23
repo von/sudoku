@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python
 ######################################################################
 #
 # sudoku
@@ -6,8 +6,6 @@
 # Solve sudoku puzzles.
 #
 ######################################################################
-
-debug = False
 
 #
 # Constants
@@ -36,11 +34,6 @@ class Node:
             return "."
         return "%d" % self.value()
 
-    def dump(self):
-        if len(self.possibleValues) > 1:
-            return str(self.possibleValues)
-        return "%d" % self.possibleValues[0]
-
     def solved(self):
         if len(self.possibleValues) == 1:
             return True
@@ -58,7 +51,7 @@ class Node:
         self.possibleValues = set(range(1,10))
         
     def setValue(self, value):
-        if debug: print "%d,%d - setting value %d" % (self.x, self.y, value)
+        if options.debug: print "%d,%d - setting value %d" % (self.x, self.y, value)
         self.possibleValues = set([value])
 
     def isOption(self, value):
@@ -69,7 +62,7 @@ class Node:
     def removeValue(self, value):
         if value not in self.possibleValues:
             return False
-        if debug: print "%d,%d - removing %d %s" % (self.x, self.y, value, self.possibleValues)
+        if options.debug: print "%d,%d - removing %d %s" % (self.x, self.y, value, self.possibleValues)
         self.possibleValues.remove(value)
         if len(self.possibleValues)== 0:
             raise Exception("No legal value for %d,%d" % (self.x, self.y))
@@ -199,14 +192,12 @@ class Sudoku:
             s += "\n"
         return s
 
-    def dump(self):
-        for y in range(numRows):
-            for x in range(numCols):
-                node = self.grid[x][y]
-                print "%d,%d %s" % (x, y, node.dump())
+    def loadFromFile(self, filename):
+	fd = open(filename, "r");
+	self.loadFromFD(fd);
+	fd.close()
 
-    
-    def loadFromFile(self, fd):
+    def loadFromFD(self, fd):
         for y in range(numRows):
             line = fd.readline()
             if line == "":
@@ -425,24 +416,25 @@ class Sudoku:
 
 # Parse commandline
 
+from optparse import OptionParser
 import sys
 
-myname = sys.argv.pop(0)
-try:
-    filename = sys.argv.pop(0)
-except:
-    print "Usage: %s <filename>" % myname
-    sys.exit(1)
+parser = OptionParser()
+parser.add_option("-d", "--debug", action="store_true", dest="debug",
+		  help="turn on debugging mode")
+(options, args) = parser.parse_args();
 
-fd = open(filename, "r")
+
+if len(args) != 1:
+    parser.error("filename missing");
+
+filename = args.pop(0)
+print "Reading puzzule from %s" % filename
 
 game = Sudoku()
-game.loadFromFile(fd)
-fd.close()
+game.loadFromFile(filename)
 
 print game
 
 game.solve()
-
-if debug and not game.solved(): game.dump()
 
