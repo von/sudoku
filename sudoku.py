@@ -19,6 +19,26 @@ possibleValues = range(1,10)
 
 ######################################################################
 
+class valueSet(set):
+    def permutations(self, permSize):
+	"""Arguments: permSize - number of elements in permutations returned
+
+	Return an iterator returning all the subsets of length permSize."""
+	if permSize == 0:
+	    yield self.__class__([])
+	else:
+	    # Convert into array so we can index
+	    a = [value for value in self]
+	    for index in xrange(len(a) - permSize):
+		subset = self.__class__(a[index + 1:])
+		for subperm in subset.permutations(permSize - 1):
+		    yield self.__class__([a[index]]) | subperm
+
+    def __str__(self):
+	return ",".join(["%d" % value for value in self])
+
+######################################################################
+
 class Node:
     def __init__(self, x, y, value=None):
         self.x = x
@@ -48,11 +68,11 @@ class Node:
         return value
 
     def anyValue(self):
-        self.possibleValues = set(range(1,10))
+        self.possibleValues = valueSet(possibleValues)
         
     def setValue(self, value):
         if options.debug: print "%d,%d - setting value %d" % (self.x, self.y, value)
-        self.possibleValues = set([value])
+        self.possibleValues = valueSet([value])
 
     def isOption(self, value):
         if value in self.possibleValues:
@@ -173,6 +193,12 @@ class Nodes(set):
                 return None
         return cell
  
+    def __str__(self):
+	s = ""
+	for node in self:
+	    s += "(%d,%d)" % (node.x, node.y)
+	return s
+
 ######################################################################
 
 class Sudoku:
@@ -286,10 +312,13 @@ class Sudoku:
                 madeChange |= self.processNode(node)
             for cell in self.cells():
                 madeChange |= self.processCell(cell)
+		madeChange |= self.checkForSubsets(cell)
             for row in self.rows():
                 madeChange |= self.processRow(row)
+		madeChange |= self.checkForSubsets(row)
             for col in self.columns():
                 madeChange |= self.processColumn(col)
+		madeChange |= self.checkForSubsets(row)
             if madeChange is False:
                 break
             print self
@@ -401,6 +430,33 @@ class Sudoku:
                 continue
         return madeChange
 
+    def checkForSubsets(self, nodes):
+	"""Check for subsets of a set of nodes that contain a subset of the
+possible values such that the subset of the nodes will contain all
+those values and we can remove them from other nodes in the set."""
+	madeChange = False
+	values = valueSet()
+	unsolvedNodes = Nodes()
+	for node in nodes:
+	    if not node.solved():
+		unsolvedNodes.add(node)
+		values |= node.possibleValues
+	if (len(unsolvedNodes) < 3):
+	    # With two or fewer nodes, there are no interesting subsets
+	    return False
+	for permSize in range(2,len(values) - 1):
+	    for valuePerm in values.permutations(permSize):
+		subsetNodes = unsolvedNodes.hasSubsetOfValues(valuePerm)
+		if len(subsetNodes) == len(valuePerm):
+		    # We know these nodes will have the given set of
+		    # values in valuePerm between them, so we can 
+		    # eliminate the values from all other nodes
+		    otherNodes = unsolvedNodes - subsetNodes
+		    madeChange |= otherNodes.removeValues(valuePerm)
+		    if options.debug and madeChange:
+			print "Found subset (%s). Removing from %s" % (valuePerm, otherNodes)
+	return madeChange
+
     def solved(self):
         """Return true if puzzle is solved."""
         for row in self.grid:
@@ -408,6 +464,15 @@ class Sudoku:
                 if not node.solved():
                     return False
         return True
+
+    def solvedCount(self):
+	"""Return number of solved nodes."""
+	count = 0
+	for row in self.grid:
+	    for node in row:
+		if node.solved():
+		    count += 1
+	return count
 
 ######################################################################
 #
@@ -429,12 +494,21 @@ if len(args) != 1:
     parser.error("filename missing");
 
 filename = args.pop(0)
-print "Reading puzzule from %s" % filename
+print "Reading puzzle from %s" % filename
 
 game = Sudoku()
 game.loadFromFile(filename)
+alreadySolved = game.solvedCount()
+
+if options.debug: print game
 
 print game
 
 game.solve()
+
+print game
+
+solved = game.solvedCount() - alreadySolved
+print "%d nodes solved" % solved
+
 
